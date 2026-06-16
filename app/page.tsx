@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, X, Users, AlertCircle, ArrowLeft, CheckCircle2, Search, Grid, List, RefreshCw, Plus, CheckSquare, Edit3 } from "lucide-react";
+import { Loader2, X, Users, AlertCircle, ArrowLeft, CheckCircle2, Search, Grid, List, RefreshCw, Plus, CheckSquare, Edit3, ImagePlus, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type StudentData = Record<string, string>;
+type QueueItem = { id: string; type: "text" | "image"; content: string; mimeType?: string };
 
 const FIELD_LABELS: Record<string, string> = {
   childName: "Child Name",
@@ -30,8 +31,8 @@ export default function Home() {
   const [status, setStatus] = useState<"idle" | "extracting" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Batch Mode States
-  const [queuedTexts, setQueuedTexts] = useState<string[]>([]);
+  // Batch Mode States (Now supports mixed media)
+  const [queuedItems, setQueuedItems] = useState<QueueItem[]>([]);
   const [stagedStudents, setStagedStudents] = useState<StudentData[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
@@ -41,7 +42,7 @@ export default function Home() {
   const [isViewingHistory, setIsViewingHistory] = useState<StudentData | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
 
-  // Search, Filter, Sorting, and View Switcher states
+  // Search/Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [casteFilter, setCasteFilter] = useState("All");
   const [transportFilter, setTransportFilter] = useState("All");
@@ -80,41 +81,75 @@ export default function Home() {
     setIsViewingHistory(null);
   };
 
-  // STEP 1 — Add raw text to the local queue
-  const handleAddToQueue = () => {
+  // --- QUEUE MANAGEMENT ---
+
+  const handleAddTextToQueue = () => {
     if (!inputText.trim()) return;
     triggerHaptic("medium");
-    setQueuedTexts((prev) => [...prev, inputText]);
+    setQueuedItems((prev) => [...prev, { id: Math.random().toString(36).substring(7), type: "text", content: inputText }]);
     setInputText("");
     setErrorMsg("");
   };
 
-  // STEP 2 — Send the queue to Gemini for bulk extraction
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    triggerHaptic("medium");
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // Extract just the base64 string without the data URL prefix
+        const base64String = (reader.result as string).split(',')[1];
+        setQueuedItems((prev) => [
+          ...prev,
+          { id: Math.random().toString(36).substring(7), type: "image", content: base64String, mimeType: file.type }
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset input so the same file can be selected again if needed
+    e.target.value = '';
+  };
+
+  const removeQueueItem = (id: string) => {
+    triggerHaptic("light");
+    setQueuedItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  // --- EXTRACTION & SAVING ---
+
   const handleProcessQueue = async () => {
-    if (queuedTexts.length === 0) return;
+    if (queuedItems.length === 0) return;
     triggerHaptic("heavy");
     setStatus("extracting");
     setErrorMsg("");
+
+    // Format the payload to match what the backend expects
+    const payloadItems = queuedItems.map(item => 
+      item.type === "text" 
+        ? { type: "text", text: item.content } 
+        : { type: "image", base64: item.content, mimeType: item.mimeType }
+    );
 
     try {
       const response = await fetch('/api/extract-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texts: queuedTexts }),
+        body: JSON.stringify({ items: payloadItems }),
       });
       if (!response.ok) throw new Error("Bulk extraction failed");
       
       const { data } = await response.json();
       setStagedStudents(data); 
-      setQueuedTexts([]); 
+      setQueuedItems([]); 
       setStatus("idle");
     } catch {
       setStatus("error");
-      setErrorMsg("Could not extract data. Check your Gemini API key.");
+      setErrorMsg("Could not extract data. Check your API key or image sizes.");
     }
   };
 
-  // STEP 3 — Save all staged students to Google Sheets
   const handleBulkSave = async () => {
     if (stagedStudents.length === 0) return;
     triggerHaptic("heavy");
@@ -147,7 +182,7 @@ export default function Home() {
     }
   };
 
-  // Filtering Logic
+  // --- FILTERING ---
   const filteredHistory = sessionHistory
     .filter((student) => {
       const query = searchQuery.toLowerCase().trim();
@@ -179,7 +214,7 @@ export default function Home() {
         <div>
           <h1 className="text-3xl font-extrabold text-[#111418] tracking-tight mb-1">Student Sync</h1>
           <p className="text-[#606A7B] text-sm leading-relaxed max-w-[280px]">
-            Batch extract WhatsApp messages and sync to Google Sheets.
+            Batch extract text or images and sync to Google Sheets.
           </p>
         </div>
 
@@ -203,8 +238,8 @@ export default function Home() {
         <div className="w-full max-w-xl">
           <div className="bg-white rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 p-4">
             <textarea
-              className="w-full h-56 md:h-64 p-5 bg-[#F9FAFB] border border-gray-100 rounded-[24px] focus:ring-2 focus:ring-black/5 focus:border-gray-300 outline-none resize-none transition-all text-gray-800 text-base leading-relaxed placeholder:text-gray-400"
-              placeholder={`Paste parent's WhatsApp message here…\n\nExample:\nChild Name: Rahul\nDate of birth: 12/05/2015\nCaste: BC…`}
+              className="w-full h-40 md:h-48 p-5 bg-[#F9FAFB] border border-gray-100 rounded-[24px] focus:ring-2 focus:ring-black/5 focus:border-gray-300 outline-none resize-none transition-all text-gray-800 text-base leading-relaxed placeholder:text-gray-400"
+              placeholder="Paste text message here..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onFocus={() => triggerHaptic("light")}
@@ -219,27 +254,57 @@ export default function Home() {
               )}
             </AnimatePresence>
 
-            <button
-              onClick={handleAddToQueue}
-              disabled={status !== "idle" || !inputText.trim()}
-              className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-4 px-4 rounded-[20px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] text-base cursor-pointer"
-            >
-              <Plus className="w-5 h-5" /> Add to Batch Queue
-            </button>
+            <div className="flex gap-2 mt-4">
+              <label className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-4 px-4 rounded-[20px] transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-sm md:text-base cursor-pointer shadow-sm">
+                <ImagePlus className="w-5 h-5" /> Add Images
+                <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={status !== "idle"} />
+              </label>
+              
+              <button
+                onClick={handleAddTextToQueue}
+                disabled={status !== "idle" || !inputText.trim()}
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-4 px-4 rounded-[20px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] text-sm md:text-base cursor-pointer"
+              >
+                <Plus className="w-5 h-5" /> Add Text
+              </button>
+            </div>
           </div>
 
-          {queuedTexts.length > 0 && (
+          {queuedItems.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
               <div className="flex justify-between items-center mb-3 px-2">
-                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">{queuedTexts.length} Messages Queued</span>
-                <button onClick={() => { triggerHaptic("light"); setQueuedTexts([]); }} className="text-xs text-red-500 font-bold cursor-pointer">Clear All</button>
+                <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">{queuedItems.length} Items Queued</span>
+                <button onClick={() => { triggerHaptic("light"); setQueuedItems([]); }} className="text-xs text-red-500 font-bold cursor-pointer">Clear All</button>
               </div>
+
+              {/* Visual Queue List */}
+              <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none px-2">
+                {queuedItems.map((item) => (
+                  <div key={item.id} className="relative shrink-0 w-24 h-24 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center justify-center overflow-hidden">
+                    <button 
+                      onClick={() => removeQueueItem(item.id)}
+                      className="absolute top-1 right-1 p-1 bg-black/50 text-white rounded-full hover:bg-black/70 backdrop-blur-md z-10"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    {item.type === "image" ? (
+                      <img src={`data:${item.mimeType};base64,${item.content}`} alt="Queue" className="w-full h-full object-cover opacity-80" />
+                    ) : (
+                      <div className="p-3 text-center flex flex-col items-center text-gray-400">
+                        <FileText className="w-6 h-6 mb-1" />
+                        <span className="text-[10px] font-semibold uppercase truncate w-full">Text snippet</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
               <button
                 onClick={handleProcessQueue}
                 disabled={status === "extracting"}
-                className="w-full bg-black text-white font-bold py-4 px-4 rounded-[20px] shadow-lg flex items-center justify-center active:scale-[0.98] cursor-pointer"
+                className="w-full mt-2 bg-black text-white font-bold py-4 px-4 rounded-[20px] shadow-lg flex items-center justify-center active:scale-[0.98] cursor-pointer"
               >
-                {status === "extracting" ? <Loader2 className="w-6 h-6 animate-spin" /> : `Extract ${queuedTexts.length} Students`}
+                {status === "extracting" ? <Loader2 className="w-6 h-6 animate-spin" /> : `Extract ${queuedItems.length} Items`}
               </button>
             </motion.div>
           )}
@@ -396,7 +461,7 @@ export default function Home() {
 
               <div className="p-6 overflow-y-auto flex-1 space-y-4">
                 {editingIndex !== null ? (
-                  Object.entries(stagedStudents[editingIndex] || {}).map(([key, value]) => (
+                  Object.entries(stagedStudents[editingIndex]).map(([key, value]) => (
                     <div key={key} className="flex flex-col space-y-1.5">
                       <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">{FIELD_LABELS[key] ?? key}</label>
                       <input
