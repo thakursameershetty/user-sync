@@ -240,6 +240,7 @@ export default function Home() {
           placeholder={`Paste parent's WhatsApp message here…\n\nExample:\nChild Name: Rahul\nDate of birth: 12/05/2015\nCaste: BC…`}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
+          onFocus={() => triggerHaptic("light")}
           disabled={status !== "idle"}
         />
 
@@ -324,6 +325,7 @@ export default function Home() {
                     placeholder="Search name, parent, Aadhaar..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => triggerHaptic("light")}
                     className="w-full text-sm text-gray-900 bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                   />
                   {searchQuery && (
@@ -483,7 +485,10 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={closeModal}
+            onClick={() => {
+              triggerHaptic("light");
+              closeModal();
+            }}
             className="fixed inset-0 z-50 flex flex-col justify-end md:justify-center items-center bg-black/40 backdrop-blur-sm md:p-4"
           >
             <motion.div
@@ -533,6 +538,7 @@ export default function Home() {
                         type="text"
                         value={value}
                         onChange={(e) => handleFieldChange(key, e.target.value)}
+                        onFocus={() => triggerHaptic("light")}
                         className="w-full text-base text-gray-900 bg-gray-50 border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                       />
                     </div>
