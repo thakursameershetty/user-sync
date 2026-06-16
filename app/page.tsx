@@ -31,8 +31,22 @@ export default function Home() {
   const [status, setStatus] = useState<"idle" | "extracting" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Default it to your mom's section so she doesn't have to change it!
-  const [activeSection, setActiveSection] = useState("Sec-B");
+  const [activeSection, setActiveSection] = useState<string>("");
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    const savedSection = localStorage.getItem("user-section");
+    if (savedSection) {
+      setActiveSection(savedSection);
+    }
+    setIsInitializing(false);
+  }, []);
+
+  const handleSectionChange = (section: string) => {
+    triggerHaptic("light");
+    setActiveSection(section);
+    localStorage.setItem("user-section", section);
+  };
 
   // Batch Mode States (Now supports mixed media)
   const [queuedItems, setQueuedItems] = useState<QueueItem[]>([]);
@@ -212,6 +226,14 @@ export default function Home() {
 
   const activeModal = editingIndex !== null || isViewingHistory !== null;
 
+  if (isInitializing) {
+    return (
+      <div className="min-h-[100dvh] bg-[#F4F5F7] flex items-center justify-center font-sans">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-[100dvh] bg-[#F4F5F7] flex flex-col items-center p-4 md:p-8 font-sans">
 
@@ -228,10 +250,11 @@ export default function Home() {
           {/* New Section Selector */}
           <div className="relative">
             <select
-              value={activeSection}
-              onChange={(e) => { triggerHaptic("light"); setActiveSection(e.target.value); }}
+              value={activeSection || ""}
+              onChange={(e) => handleSectionChange(e.target.value)}
               className="appearance-none bg-white border border-gray-200 text-gray-800 font-bold text-sm rounded-full px-4 py-2.5 pr-8 shadow-sm outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
             >
+              {!activeSection && <option value="" disabled>Select Section</option>}
               <option value="Sec-A">Section A</option>
               <option value="Sec-B">Section B</option>
               <option value="Sec-C">Section C</option>
@@ -284,17 +307,17 @@ export default function Home() {
             </AnimatePresence>
 
             <div className="flex gap-2 mt-4">
-              <label className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-4 px-4 rounded-[20px] transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-sm md:text-base cursor-pointer shadow-sm">
-                <ImagePlus className="w-5 h-5" /> Add Images
-                <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={status !== "idle"} />
+              <label className={`flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-4 px-4 rounded-[20px] transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-sm md:text-base cursor-pointer shadow-sm ${!activeSection ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}>
+                <ImagePlus className="w-5 h-5" /> {!activeSection ? "Select Section First" : "Add Images"}
+                <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={status !== "idle" || !activeSection} />
               </label>
 
               <button
                 onClick={handleAddTextToQueue}
-                disabled={status !== "idle" || !inputText.trim()}
+                disabled={status !== "idle" || !inputText.trim() || !activeSection}
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-4 px-4 rounded-[20px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] text-sm md:text-base cursor-pointer"
               >
-                <Plus className="w-5 h-5" /> Add Text
+                <Plus className="w-5 h-5" /> {!activeSection ? "Select Section First" : "Add Text"}
               </button>
             </div>
           </div>
@@ -330,7 +353,7 @@ export default function Home() {
 
               <button
                 onClick={handleProcessQueue}
-                disabled={status === "extracting"}
+                disabled={status === "extracting" || !activeSection}
                 className="w-full mt-2 bg-black text-white font-bold py-4 px-4 rounded-[20px] shadow-lg flex items-center justify-center active:scale-[0.98] cursor-pointer"
               >
                 {status === "extracting" ? <Loader2 className="w-6 h-6 animate-spin" /> : `Extract ${queuedItems.length} Items`}
@@ -382,10 +405,10 @@ export default function Home() {
             </button>
             <button
               onClick={handleBulkSave}
-              disabled={status === "saving"}
+              disabled={status === "saving" || !activeSection}
               className="flex-[2] bg-blue-600 text-white font-bold py-4 rounded-[20px] shadow-lg flex items-center justify-center active:scale-[0.98] cursor-pointer"
             >
-              {status === "saving" ? <Loader2 className="w-6 h-6 animate-spin" /> : "Looks Good, Save All"}
+              {status === "saving" ? <Loader2 className="w-6 h-6 animate-spin" /> : !activeSection ? "Select Section First" : "Looks Good, Save All"}
             </button>
           </div>
         </div>
