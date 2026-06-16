@@ -28,6 +28,7 @@ export async function POST(req: Request) {
       3. Keep Aadhaar numbers uniformly formatted as 12 digits separated by standard single spaces.
       4. Carefully extract separate regular and WhatsApp numbers if indicated.
       5. ADDRESS VALIDATION (CRITICAL): Act as an Indian geography expert. Analyze the provided address and correct any spelling mistakes to ensure it matches real, verified locations in India (e.g., correct "Prahaladhapura" to "Prahaladhapuram"). Format it cleanly with proper sentence casing.
+      6. DATE OF BIRTH (dob) FORMAT (CRITICAL): Always format the "dob" field strictly as DD/MM/YYYY (e.g., "05/12/2015"). Convert words (like "5th Dec 2015" or "December 5, 2015") or alternative formats (like "2015-12-05" or "12-05-2015") to DD/MM/YYYY. Ensure leading zeros are used for single-digit days and months. If missing, return "N/A".
       
       Required JSON Schema:
       {
@@ -56,9 +57,58 @@ export async function POST(req: Request) {
     const result = await model.generateContent(prompt);
     const parsedData = JSON.parse(result.response.text());
 
+    if (parsedData && typeof parsedData.dob === "string") {
+      parsedData.dob = normalizeDOB(parsedData.dob);
+    }
+
     return NextResponse.json({ success: true, data: parsedData });
   } catch (error) {
     console.error("Extraction error:", error);
     return NextResponse.json({ error: "Failed to extract data" }, { status: 500 });
   }
+}
+
+function normalizeDOB(dob: string): string {
+  if (!dob || dob === "N/A") return "N/A";
+
+  const cleanDob = dob.trim();
+
+  // Check if it matches D(D)/M(M)/YYYY
+  const dmySlashMatch = cleanDob.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmySlashMatch) {
+    const [_, day, month, year] = dmySlashMatch;
+    return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+  }
+
+  // Check if it matches YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  const ymdMatch = cleanDob.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (ymdMatch) {
+    const [_, year, month, day] = ymdMatch;
+    return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+  }
+
+  // Check if it matches DD-MM-YYYY or DD.MM.YYYY
+  const dmyOtherMatch = cleanDob.match(/^(\d{1,2})[-.](\d{1,2})[-.](\d{4})$/);
+  if (dmyOtherMatch) {
+    const [_, day, month, year] = dmyOtherMatch;
+    return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+  }
+
+  // Try using JS Date parsing if it contains letters (like June 15, 2015)
+  try {
+    if (/[a-zA-Z]/.test(cleanDob)) {
+      const tryDate = cleanDob.replace(/(\d+)(st|nd|rd|th)/, "$1");
+      const dateObj = new Date(tryDate);
+      if (!isNaN(dateObj.getTime())) {
+        const day = String(dateObj.getDate()).padStart(2, "0");
+        const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const year = dateObj.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+    }
+  } catch (e) {
+    // Ignore and fallback
+  }
+
+  return cleanDob;
 }
