@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
+import { normalizeDOB } from "../../utils/date";
 
 const serviceAccountAuth = new JWT({
   email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
 
     const sheetPayload = {
       "Child Name": data.childName,
-      "Date of birth": data.dob,
+      "Date of birth": normalizeDOB(data.dob),
       "Caste": data.caste,
       "Child Aadhaar": data.childAadhaar,
       "Father Name": data.fatherName,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
+import { normalizeDOB } from "../../utils/date";
 
 // Re-use the bot credentials
 const serviceAccountAuth = new JWT({
@@ -12,16 +13,16 @@ const serviceAccountAuth = new JWT({
 export async function GET() {
   try {
     const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID!, serviceAccountAuth);
-    await doc.loadInfo(); 
-    const sheet = doc.sheetsByIndex[0]; 
-    
+    await doc.loadInfo();
+    const sheet = doc.sheetsByIndex[0];
+
     // Fetch all rows from the spreadsheet
     const rows = await sheet.getRows();
 
     // Map the Google Sheet rows back into our JSON structure
     const historyData = rows.map((row) => ({
       childName: row.get("Child Name") || "N/A",
-      dob: row.get("Date of birth") || "N/A",
+      dob: normalizeDOB(row.get("Date of birth") || "N/A"),
       caste: row.get("Caste") || "N/A",
       childAadhaar: row.get("Child Aadhaar") || "N/A",
       fatherName: row.get("Father Name") || "N/A",
