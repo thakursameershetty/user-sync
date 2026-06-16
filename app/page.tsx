@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, X, Users, AlertTriangle, AlertCircle, ArrowLeft, CheckCircle2, Search, Grid, List } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -32,10 +32,28 @@ export default function Home() {
   const [previewData, setPreviewData] = useState<StudentData | null>(null);
   const [showDuplicatePrompt, setShowDuplicatePrompt] = useState(false);
 
-  // State for the full-screen slide-over history view
   const [showHistoryPage, setShowHistoryPage] = useState(false);
   const [sessionHistory, setSessionHistory] = useState<StudentData[]>([]);
   const [isViewingHistory, setIsViewingHistory] = useState<StudentData | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const response = await fetch('/api/history');
+        if (response.ok) {
+          const { data } = await response.json();
+          setSessionHistory(data);
+        }
+      } catch {
+        console.error("Failed to load history");
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, []);
 
   // Search, Filter, Sorting, and View Switcher states
   const [searchQuery, setSearchQuery] = useState("");
@@ -110,31 +128,21 @@ export default function Home() {
 
       if (!response.ok) throw new Error(result.error || "Save failed");
 
-      // Update session history
-      if (!forceUpdate) {
-        setSessionHistory((prev) => [previewData, ...prev]);
-      } else {
-        // Overwrote record: update list entry dynamically
-        setSessionHistory((prev) => {
-          const index = prev.findIndex(
-            (s) => s.childName.trim().toLowerCase() === previewData.childName.trim().toLowerCase()
-          );
-          if (index !== -1) {
-            const updated = [...prev];
-            updated[index] = previewData;
-            return updated;
-          }
-          return [previewData, ...prev];
-        });
+      // Update session history from the sheet (source of truth)
+      const updatedHistoryResponse = await fetch('/api/history');
+      if (updatedHistoryResponse.ok) {
+        const { data } = await updatedHistoryResponse.json();
+        setSessionHistory(data);
       }
 
       setPreviewData(null);
       setShowDuplicatePrompt(false);
       setInputText("");
       setStatus("idle");
-    } catch (error: any) {
+    } catch (error) {
       setStatus("error");
-      setErrorMsg(error.message || "Could not save to Google Sheets. Check your service account credentials.");
+      const errMsg = error instanceof Error ? error.message : "Could not save to Google Sheets. Check your service account credentials.";
+      setErrorMsg(errMsg);
     }
   };
 
@@ -410,7 +418,12 @@ export default function Home() {
 
               {/* List/Grid Content */}
               <div className="flex-1 overflow-y-auto p-4 pb-safe">
-                {filteredHistory.length === 0 ? (
+                {isHistoryLoading ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400 mt-20">
+                    <Loader2 className="w-12 h-12 mb-3 animate-spin text-gray-400" />
+                    <p>Loading history…</p>
+                  </div>
+                ) : filteredHistory.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-gray-400 mt-20">
                     <Users className="w-12 h-12 mb-3 opacity-20" />
                     <p>No matching records found.</p>
@@ -548,7 +561,7 @@ export default function Home() {
                       <div>
                         <p className="text-sm font-bold text-amber-900">Student Exists!</p>
                         <p className="text-xs font-medium text-amber-700 mt-0.5">
-                          A record with the name <strong>"{previewData.childName}"</strong> already exists in Google Sheets. Overwrite existing record?
+                          A record with the name <strong>&quot;{previewData.childName}&quot;</strong> already exists in Google Sheets. Overwrite existing record?
                         </p>
                       </div>
                     </div>
