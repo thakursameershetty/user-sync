@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     );
 
     const sheetPayload = {
+      "Section": data.section || "N/A",
       "Child Name": data.childName,
       "Date of birth": normalizeDOB(data.dob),
       "Caste": data.caste,

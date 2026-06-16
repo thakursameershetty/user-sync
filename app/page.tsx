@@ -31,6 +31,9 @@ export default function Home() {
   const [status, setStatus] = useState<"idle" | "extracting" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // Default it to your mom's section so she doesn't have to change it!
+  const [activeSection, setActiveSection] = useState("Sec-B");
+
   // Batch Mode States (Now supports mixed media)
   const [queuedItems, setQueuedItems] = useState<QueueItem[]>([]);
   const [stagedStudents, setStagedStudents] = useState<StudentData[]>([]);
@@ -126,9 +129,9 @@ export default function Home() {
     setErrorMsg("");
 
     // Format the payload to match what the backend expects
-    const payloadItems = queuedItems.map(item => 
-      item.type === "text" 
-        ? { type: "text", text: item.content } 
+    const payloadItems = queuedItems.map(item =>
+      item.type === "text"
+        ? { type: "text", text: item.content }
         : { type: "image", base64: item.content, mimeType: item.mimeType }
     );
 
@@ -139,10 +142,10 @@ export default function Home() {
         body: JSON.stringify({ items: payloadItems }),
       });
       if (!response.ok) throw new Error("Bulk extraction failed");
-      
+
       const { data } = await response.json();
-      setStagedStudents(data); 
-      setQueuedItems([]); 
+      setStagedStudents(data);
+      setQueuedItems([]);
       setStatus("idle");
     } catch {
       setStatus("error");
@@ -160,11 +163,11 @@ export default function Home() {
       const response = await fetch('/api/save-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataArray: stagedStudents }),
+        body: JSON.stringify({ dataArray: stagedStudents, section: activeSection }),
       });
 
       if (!response.ok) throw new Error("Bulk save failed");
-      
+
       await fetchHistory();
       setStagedStudents([]);
       setStatus("idle");
@@ -185,6 +188,9 @@ export default function Home() {
   // --- FILTERING ---
   const filteredHistory = sessionHistory
     .filter((student) => {
+      // Only show students belonging to the active section
+      if (student.section !== activeSection) return false;
+
       const query = searchQuery.toLowerCase().trim();
       if (query) {
         const nameMatch = student.childName?.toLowerCase().includes(query);
@@ -218,22 +224,45 @@ export default function Home() {
           </p>
         </div>
 
-        <button
-          onClick={() => { triggerHaptic("medium"); setShowHistoryPage(true); }}
-          className="p-3 bg-white border border-gray-200 rounded-full shadow-sm active:scale-95 transition-transform text-gray-700 hover:bg-gray-50 flex items-center justify-center relative cursor-pointer"
-        >
-          <Users className="w-5 h-5" />
-          {sessionHistory.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-              {sessionHistory.length}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* New Section Selector */}
+          <div className="relative">
+            <select
+              value={activeSection}
+              onChange={(e) => { triggerHaptic("light"); setActiveSection(e.target.value); }}
+              className="appearance-none bg-white border border-gray-200 text-gray-800 font-bold text-sm rounded-full px-4 py-2.5 pr-8 shadow-sm outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+            >
+              <option value="Sec-A">Section A</option>
+              <option value="Sec-B">Section B</option>
+              <option value="Sec-C">Section C</option>
+            </select>
+            {/* Custom dropdown arrow */}
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L5 5L9 1" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+
+          {/* History Button */}
+          <button
+            onClick={() => { triggerHaptic("medium"); setShowHistoryPage(true); }}
+            className="p-2.5 bg-white border border-gray-200 rounded-full shadow-sm active:scale-95 transition-transform text-gray-700 hover:bg-gray-50 flex items-center justify-center relative cursor-pointer"
+          >
+            <Users className="w-5 h-5" />
+            {/* We calculate the count based on filtered history now! */}
+            {filteredHistory.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {filteredHistory.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ── MAIN CONDITIONAL UI ── */}
       {stagedStudents.length === 0 ? (
-        
+
         /* --- QUEUE MODE --- */
         <div className="w-full max-w-xl">
           <div className="bg-white rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 p-4">
@@ -259,7 +288,7 @@ export default function Home() {
                 <ImagePlus className="w-5 h-5" /> Add Images
                 <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={status !== "idle"} />
               </label>
-              
+
               <button
                 onClick={handleAddTextToQueue}
                 disabled={status !== "idle" || !inputText.trim()}
@@ -281,7 +310,7 @@ export default function Home() {
               <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none px-2">
                 {queuedItems.map((item) => (
                   <div key={item.id} className="relative shrink-0 w-24 h-24 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col items-center justify-center overflow-hidden">
-                    <button 
+                    <button
                       onClick={() => removeQueueItem(item.id)}
                       className="absolute top-1 right-1 p-1 bg-black/50 text-white rounded-full hover:bg-black/70 backdrop-blur-md z-10"
                     >
@@ -326,7 +355,7 @@ export default function Home() {
                   <p className="font-bold text-lg text-gray-900">{student.childName}</p>
                   <p className="text-xs text-gray-500 mt-1">Father: {student.fatherName}</p>
                 </div>
-                <button 
+                <button
                   onClick={() => { triggerHaptic("light"); setEditingIndex(idx); }}
                   className="p-3 bg-gray-50 rounded-full text-blue-600 active:bg-gray-100 transition-colors cursor-pointer"
                 >
@@ -345,7 +374,7 @@ export default function Home() {
           </AnimatePresence>
 
           <div className="flex gap-3">
-            <button 
+            <button
               onClick={() => { triggerHaptic("light"); setStagedStudents([]); }}
               className="flex-1 bg-white border border-gray-200 text-gray-700 font-bold py-4 rounded-[20px] active:bg-gray-50 cursor-pointer"
             >

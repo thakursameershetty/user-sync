@@ -21,6 +21,7 @@ export async function GET() {
 
     // Map the Google Sheet rows back into our JSON structure
     const historyData = rows.map((row) => ({
+      section: row.get("Section") || "N/A",
       childName: row.get("Child Name") || "N/A",
       dob: normalizeDOB(row.get("Date of birth") || "N/A"),
       caste: row.get("Caste") || "N/A",

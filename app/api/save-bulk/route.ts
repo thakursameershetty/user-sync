@@ -11,8 +11,8 @@ const serviceAccountAuth = new JWT({
 
 export async function POST(req: Request) {
   try {
-    // We now expect an array of formatted JSON objects
-    const { dataArray } = await req.json();
+    // We now expect an array of formatted JSON objects and the teacher's active section
+    const { dataArray, section } = await req.json();
 
     if (!dataArray || !Array.isArray(dataArray)) {
       return NextResponse.json({ error: "No data provided" }, { status: 400 });
@@ -24,6 +24,7 @@ export async function POST(req: Request) {
 
     // Format the array to match the exact column headers
     const rowsToInsert = dataArray.map((data: Record<string, string>) => ({
+      "Section": section || "N/A",
       "Child Name": data.childName,
       "Date of birth": normalizeDOB(data.dob),
       "Caste": data.caste,
