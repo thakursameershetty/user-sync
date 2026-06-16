@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Loader2, X, Users, AlertTriangle, AlertCircle, ArrowLeft, CheckCircle2, Search, Grid, List } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Loader2, X, Users, AlertTriangle, AlertCircle, ArrowLeft, CheckCircle2, Search, Grid, List, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type StudentData = Record<string, string>;
@@ -37,23 +37,27 @@ export default function Home() {
   const [isViewingHistory, setIsViewingHistory] = useState<StudentData | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const response = await fetch('/api/history');
-        if (response.ok) {
-          const { data } = await response.json();
-          setSessionHistory(data);
-        }
-      } catch {
-        console.error("Failed to load history");
-      } finally {
-        setIsHistoryLoading(false);
+  const fetchHistory = useCallback(async (isManual = false) => {
+    if (isManual) {
+      setIsHistoryLoading(true);
+    }
+    try {
+      const response = await fetch('/api/history');
+      if (response.ok) {
+        const { data } = await response.json();
+        setSessionHistory(data);
       }
-    };
-
-    fetchHistory();
+    } catch {
+      console.error("Failed to load history");
+    } finally {
+      setIsHistoryLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchHistory(false);
+  }, [fetchHistory]);
 
   // Search, Filter, Sorting, and View Switcher states
   const [searchQuery, setSearchQuery] = useState("");
@@ -129,11 +133,7 @@ export default function Home() {
       if (!response.ok) throw new Error(result.error || "Save failed");
 
       // Update session history from the sheet (source of truth)
-      const updatedHistoryResponse = await fetch('/api/history');
-      if (updatedHistoryResponse.ok) {
-        const { data } = await updatedHistoryResponse.json();
-        setSessionHistory(data);
-      }
+      await fetchHistory();
 
       setPreviewData(null);
       setShowDuplicatePrompt(false);
@@ -302,17 +302,31 @@ export default function Home() {
               </div>
 
               {/* Slide-over Header */}
-              <div className="bg-white px-4 py-4 pt-2 md:pt-6 flex items-center border-b border-gray-100 shadow-sm z-10 shrink-0">
+              <div className="bg-white px-4 py-4 pt-2 md:pt-6 flex items-center justify-between border-b border-gray-100 shadow-sm z-10 shrink-0">
+                <div className="flex items-center">
+                  <button
+                    onClick={() => {
+                      triggerHaptic("light");
+                      setShowHistoryPage(false);
+                    }}
+                    className="p-2 -ml-2 rounded-full active:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft className="w-6 h-6 text-gray-900" />
+                  </button>
+                  <h2 className="text-xl font-bold text-gray-900 ml-2">Students</h2>
+                </div>
+
                 <button
                   onClick={() => {
-                    triggerHaptic("light");
-                    setShowHistoryPage(false);
+                    triggerHaptic("medium");
+                    fetchHistory(true);
                   }}
-                  className="p-2 -ml-2 rounded-full active:bg-gray-100 transition-colors cursor-pointer"
+                  disabled={isHistoryLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F4F5F7] hover:bg-gray-200 active:scale-95 disabled:opacity-50 transition-all rounded-xl text-xs font-semibold text-gray-700 cursor-pointer"
                 >
-                  <ArrowLeft className="w-6 h-6 text-gray-900" />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin' : ''}`} />
+                  Sync Sheets
                 </button>
-                <h2 className="text-xl font-bold text-gray-900 ml-2">Students</h2>
               </div>
 
               {/* Search, Filters, Sort, and View switcher Panel */}
